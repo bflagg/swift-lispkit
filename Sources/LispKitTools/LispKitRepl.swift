@@ -328,19 +328,11 @@ open class LispKitRepl {
     if let context = self.context,
        let ppath = self.prelude.value ??
                    (self.flags.parameters.isEmpty ? Context.defaultPreludePath : nil) {
-      do {
-        _ = try context.machine.eval(file: ppath, in: context.global)
-      } catch let error as RuntimeError {
-        guard self.printError("cannot evaluate prelude \(ppath): \(error.message)") else {
-          return false
-        }
-      } catch let error as NSError {
-        guard self.printError("cannot evaluate prelude \(ppath): " +
-                              error.localizedDescription) else {
-          return false
-        }
-      } catch {
-        guard self.printError("cannot evaluate prelude \(ppath)") else {
+      let res = context.evaluator.onMainThreadDo { thread in
+        try thread.eval(file: ppath, in: context.global)
+      }
+      if case .error(let err) = res {
+        guard self.printError("cannot evaluate prelude \(ppath): \(err.message)") else {
           return false
         }
       }
@@ -373,10 +365,10 @@ open class LispKitRepl {
     guard let context = self.context else {
       return false
     }
-    let res = context.machine.onTopLevelDo {
-      return try context.machine.eval(file: program, in: context.global)
+    let res = context.evaluator.onMainThreadDo { thread in
+      try thread.eval(file: program, in: context.global)
     }
-    if context.machine.exitTriggered {
+    if context.evaluator.exitTriggered {
       if res != .true {
         print("abnormal exit: \(res.description)\n")
         return false
@@ -403,13 +395,13 @@ open class LispKitRepl {
     var buffer = ""
     while let line = readCommand(withPrompt: buffer.isEmpty) {
       buffer += line + " "
-      let res = context.machine.onTopLevelDo {
-        return try context.machine.eval(str: buffer,
-                                        sourceId: SourceManager.consoleSourceId,
-                                        in: context.global, as: "<repl>")
+      let res = context.evaluator.onMainThreadDo { thread in
+        try thread.eval(str: buffer,
+                        sourceId: SourceManager.consoleSourceId,
+                        in: context.global, as: "<repl>")
       }
       // Exit loop if the machine has executed the `exit` function
-      if context.machine.exitTriggered {
+      if context.evaluator.exitTriggered {
         if res != .true {
           print("abnormal exit: \(res.description)\n")
           return false

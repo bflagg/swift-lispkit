@@ -34,13 +34,13 @@ public final class SystemLibrary: NativeLibrary {
   public var currentDirectoryPath: String {
     get {
       do {
-        return try self.context.machine.getParam(self.currentDirectoryProc)!.asString()
+        return try self.context.evaluator.getParam(self.currentDirectoryProc)!.asString()
       } catch {
         preconditionFailure("current directory path not a string")
       }
     }
     set {
-      _ = self.context.machine.setParam(self.currentDirectoryProc, to: .makeString(newValue))
+      _ = self.context.evaluator.setParam(self.currentDirectoryProc, to: .makeString(newValue))
     }
   }
 
@@ -225,7 +225,7 @@ public final class SystemLibrary: NativeLibrary {
       environment = try args[args.startIndex + 1].asEnvironment()
     }
     // Load file and parse expressions
-    let exprs = try self.context.machine.parse(file: filename)
+    let exprs = try self.context.evaluator.parse(file: filename)
     let sourceDir = self.context.fileHandler.directory(filename)
     // Hand over work to `compileAndEvalFirst`
     return (self.compileAndEvalFirstProc, [exprs, .makeString(sourceDir), .env(environment!)])
@@ -518,19 +518,19 @@ public final class SystemLibrary: NativeLibrary {
       switch (expr) {
         case .fixnum(let level):
           if level == 0 {
-            self.context.machine.traceCalls = .off
+            self.context.evaluator.current.machine.traceCalls = .off
           } else if level == 1 {
-            self.context.machine.traceCalls = .byProc
+            self.context.evaluator.current.machine.traceCalls = .byProc
           } else {
-            self.context.machine.traceCalls = .on
+            self.context.evaluator.current.machine.traceCalls = .on
           }
         case .false:
-          self.context.machine.traceCalls = .off
+          self.context.evaluator.current.machine.traceCalls = .off
         default:
-          self.context.machine.traceCalls = .on
+          self.context.evaluator.current.machine.traceCalls = .on
       }
     }
-    switch context.machine.traceCalls {
+    switch self.context.evaluator.current.machine.traceCalls {
       case .off:
         return .fixnum(0)
       case .byProc:
@@ -785,7 +785,7 @@ public final class SystemLibrary: NativeLibrary {
     stream.waitForResponse()
     guard let input = BinaryInput(source: stream,
                                   url: url,
-                                  abortionCallback: self.context.machine.isAbortionRequested) else {
+                                  abortionCallback: self.context.evaluator.isAbortionRequested) else {
       throw RuntimeError.eval(.cannotOpenUrl, .makeString(url.description))
     }
     var response = Expr.null

@@ -167,7 +167,10 @@ public final class VirtualMachine: TrackedObject {
   
   /// The context of this virtual machine
   private unowned let context: Context
-  
+
+  /// The evaluator of this virtual machine
+  private unowned let evaluator: Evaluator
+
   /// The stack used by this virtual machine
   private var stack: Exprs
   
@@ -197,21 +200,13 @@ public final class VirtualMachine: TrackedObject {
   /// Internal counter used for triggering the garbage collector.
   private var execInstr: UInt64
   
-  /// Error handler procedure.
-  public var raiseProc: Procedure? = nil
-  
-  /// When set to true, it will trigger an abortion of the machine evaluator as soon as possible.
-  private var abortionRequested: Bool = false
-  
-  /// Will be set to true if the `exit` function was invoked.
-  public internal(set) var exitTriggered: Bool = false
-  
   /// When set to true, will print call and return traces
   public var traceCalls: CallTracingMode = .off
   
   /// Initializes a new virtual machine for the given context.
-  public init(for context: Context) {
-    self.context = context
+  public init(for evaluator: Evaluator) {
+    self.context = evaluator.context
+    self.evaluator = evaluator
     self.stack = Exprs(repeating: .undef, count: 1024)
     self.sp = 0
     self.maxSp = 0
@@ -219,6 +214,22 @@ public final class VirtualMachine: TrackedObject {
     self.winders = nil
     self.parameters = HashTable(equiv: .eq)
     self.execInstr = 0
+    super.init()
+    self.setParameterProc = Procedure("_set-parameter", self.setParameter, nil)
+  }
+
+  /// Initializes a new virtual machine inheriting state based on the given virtual machine `vm`.
+  public init(basedOn vm: VirtualMachine) {
+    self.context = vm.context
+    self.evaluator = vm.evaluator
+    self.stack = Exprs(repeating: .undef, count: 1024)
+    self.sp = 0
+    self.maxSp = 0
+    self.registers = Registers(code: Code([], [], []), captured: [], fp: 0, root: true)
+    self.winders = vm.winders
+    self.parameters = vm.parameters
+    self.execInstr = 0
+    self.traceCalls = vm.traceCalls
     super.init()
     self.setParameterProc = Procedure("_set-parameter", self.setParameter, nil)
   }
@@ -233,215 +244,19 @@ public final class VirtualMachine: TrackedObject {
                                winders: self.winders)
   }
   
-  /// Requests abortion of the machine evaluator.
-  public func abort() {
-    self.abortionRequested = true
+  /// Returns true of the stack is empty
+  internal var stackEmpty: Bool {
+    return self.sp == 0
   }
   
-  /// Returns true if an abortion was requested.
-  public func isAbortionRequested() -> Bool {
-    return self.abortionRequested
-  }
-  
-  /// Checks that computation happens on top level and fails if the conditions are not met.
-  private func assertTopLevel() {
-    guard self.sp == 0 && !self.abortionRequested else {
-      preconditionFailure("preconditions for top-level evaluation not met")
+  internal func cleanupTopLevelEval() {
+    for i in 0..<self.sp {
+      self.stack[i] = .undef
     }
+    self.sp = 0
+    self.winders = nil
   }
-  
-   /// Executes an evaluation function at the top-level.
-  public func onTopLevelDo(_ eval: () throws -> Expr) -> Expr {
-    // Prepare for the evaluation
-    self.assertTopLevel()
-    self.exitTriggered = false
-    // Reset machine once evaluation finished
-    defer {
-      for i in 0..<self.sp {
-        self.stack[i] = .undef
-      }
-      self.sp = 0
-      self.winders = nil
-      self.abortionRequested = false
-    }
-    // Perform evaluation
-    var exception: RuntimeError? = nil
-    do {
-      return try eval()
-    } catch let error as RuntimeError { // handle Lisp-related issues
-      exception = error
-    } catch let error as NSError { // handle OS-related issues
-      exception = RuntimeError.os(error)
-    }
-    // Abortions ignore dynamic environments
-    guard !self.abortionRequested else {
-      return .error(exception!)
-    }
-    // Return thrown exception if there is no `raise` procedure. In such a case, there is no
-    // unwind of the dynamic environment.
-    guard let raiseProc = self.raiseProc else {
-      return .error(exception!)
-    }
-    // Raise thrown exceptions
-    while let obj = exception {
-      do {
-        return try self.apply(.procedure(raiseProc), to: .pair(.error(obj), .null))
-      } catch let error as RuntimeError { // handle Lisp-related issues
-        exception = error
-      } catch let error as NSError { // handle OS-related issues
-        exception = RuntimeError.os(error)
-      }
-    }
-    // Never happens
-    return .void
-  }
-  
-  /// Loads the file at file patch `path`, compiles it in the interaction environment, and
-  /// executes it using this virtual machine.
-  public func eval(file path: String,
-                   in env: Env,
-                   as name: String? = nil,
-                   optimize: Bool = true,
-                   foldCase: Bool = false) throws -> Expr {
-    let (sourceId, text) = try self.context.sources.readSource(for: path)
-    return try self.eval(str: text,
-                         sourceId: sourceId,
-                         in: env,
-                         as: name,
-                         optimize: optimize,
-                         inDirectory: self.context.fileHandler.directory(path),
-                         foldCase: foldCase)
-  }
-  
-  /// Parses the given string, compiles it in the interaction environment, and executes it using
-  /// this virtual machine.
-  public func eval(str: String,
-                   sourceId: UInt16,
-                   in env: Env,
-                   as name: String? = nil,
-                   optimize: Bool = true,
-                   inDirectory: String? = nil,
-                   foldCase: Bool = false) throws -> Expr {
-    return try self.eval(exprs: self.parse(str: str, sourceId: sourceId, foldCase: foldCase),
-                         in: env,
-                         as: name,
-                         optimize: optimize,
-                         inDirectory: inDirectory)
-  }
-  
-  /// Compiles the given list of expressions in the interaction environment and executes
-  /// it using this virtual machine.
-  public func eval(exprs: Expr,
-                   in env: Env,
-                   as name: String? = nil,
-                   optimize: Bool = true,
-                   inDirectory: String? = nil) throws -> Expr {
-    var exprlist = exprs
-    var res = Expr.void
-    while case .pair(let expr, let rest) = exprlist {
-      let code = try Compiler.compile(expr: .makeList(expr),
-                                      in: env,
-                                      optimize: optimize,
-                                      inDirectory: inDirectory)
-      // log(code.description)
-      if let name = name {
-        res = try self.execute(code, as: name)
-      } else {
-        res = try self.execute(code)
-      }
-      exprlist = rest
-    }
-    guard exprlist.isNull else {
-      throw RuntimeError.type(exprs, expected: [.properListType])
-    }
-    return res
-  }
-  
-  /// Compiles the given expression in the interaction environment and executes it using this
-  /// virtual machine.
-  public func eval(expr: Expr,
-                   in env: Env,
-                   as name: String? = nil,
-                   optimize: Bool = true,
-                   inDirectory: String? = nil) throws -> Expr {
-    return try self.eval(exprs: .makeList(expr),
-                         in: env,
-                         as: name,
-                         optimize: optimize,
-                         inDirectory: inDirectory)
-  }
-  
-  /// Parses the given file and returns a list of parsed expressions.
-  public func parse(file path: String, foldCase: Bool = false) throws -> Expr {
-    let (sourceId, text) = try self.context.sources.readSource(for: path)
-    return try self.parse(str: text, sourceId: sourceId, foldCase: foldCase)
-  }
-  
-  /// Parses the given string and returns a list of parsed expressions.
-  public func parse(str: String, sourceId: UInt16, foldCase: Bool = false) throws -> Expr {
-    return .makeList(try self.parseExprs(str: str, sourceId: sourceId, foldCase: foldCase))
-  }
-  
-  /// Parses the given string and returns an array of parsed expressions.
-  public func parseExprs(file path: String, foldCase: Bool = false) throws -> Exprs {
-    let (sourceId, text) = try self.context.sources.readSource(for: path)
-    return try self.parseExprs(str: text,
-                               sourceId: sourceId,
-                               foldCase: foldCase)
-  }
-  
-  /// Parses the given string and returns an array of parsed expressions.
-  public func parseExprs(str: String, sourceId: UInt16, foldCase: Bool = false) throws -> Exprs {
-    let input = TextInput(string: str,
-                          abortionCallback: self.context.machine.isAbortionRequested)
-    let parser = Parser(symbols: self.context.symbols,
-                        input: input,
-                        sourceId: sourceId,
-                        foldCase: foldCase)
-    var exprs = Exprs()
-    while !parser.finished {
-      exprs.append(try parser.parse().datum) // TODO: remove .datum
-    }
-    return exprs
-  }
-  
-  /// Compiles the given expression `expr` in the environment `env` and executes it using
-  /// this virtual machine.
-  public func compileAndEval(expr: Expr,
-                             in env: Env,
-                             usingRulesEnv renv: Env? = nil,
-                             optimize: Bool = true,
-                             inDirectory: String? = nil) throws -> Expr {
-    let code = try Compiler.compile(expr: .makeList(expr),
-                                    in: env,
-                                    and: renv,
-                                    optimize: optimize,
-                                    inDirectory: inDirectory)
-    return try self.apply(.procedure(Procedure(code)), to: .null)
-  }
-  
-  /// Applies `args` to the function `fun` in environment `env`.
-  public func apply(_ fun: Expr, to args: Expr) throws -> Expr {
-    self.push(fun)
-    var n = try self.pushArguments(args)
-    let proc = try self.invoke(&n, 1)
-    switch proc.kind {
-      case .closure(_, let captured, let code):
-        return try self.execute(code, args: n, captured: captured)
-      case .rawContinuation(_):
-        return try self.execute()
-      case .transformer(let rules):
-        if n != 1 {
-          throw RuntimeError.argumentCount(min: 1, max: 1, args: args)
-        }
-        let res = try rules.expand(self.pop())
-        self.drop()
-        return res
-      default:
-        return self.pop()
-    }
-  }
-  
+
   /// Pushes the given expression onto the stack.
   @inline(__always) private func push(_ expr: Expr) {
     if self.sp < self.stack.count {
@@ -493,7 +308,7 @@ public final class VirtualMachine: TrackedObject {
   }
   
   /// Removes the top element from the stack and returns it.
-  @inline(__always) private func pop() -> Expr {
+  @inline(__always) internal func pop() -> Expr {
     self.sp = self.sp &- 1
     let res = self.stack[self.sp]
     self.stack[self.sp] = .undef
@@ -501,7 +316,7 @@ public final class VirtualMachine: TrackedObject {
   }
   
   /// Removes the top element from the stack
-  @inline(__always) private func drop() {
+  @inline(__always) internal func drop() {
     self.sp = self.sp &- 1
     self.stack[self.sp] = .undef
   }
@@ -547,11 +362,7 @@ public final class VirtualMachine: TrackedObject {
     }
     return winders?.handlers
   }
-  
-  public func getParam(_ param: Procedure) -> Expr? {
-    return self.getParameter(.procedure(param))
-  }
-  
+
   public func getParameter(_ param: Expr) -> Expr? {
     guard case .some(.pair(_, .box(let cell))) = self.parameters.get(param) else {
       guard case .procedure(let proc) = param,
@@ -562,11 +373,7 @@ public final class VirtualMachine: TrackedObject {
     }
     return cell.value
   }
-  
-  public func setParam(_ param: Procedure, to value: Expr) -> Expr {
-    return self.setParameter(.procedure(param), to: value)
-  }
-  
+
   public func setParameter(_ param: Expr, to value: Expr) -> Expr {
     guard case .some(.pair(_, .box(let cell))) = self.parameters.get(param) else {
       guard case .procedure(let proc) = param,
@@ -584,18 +391,7 @@ public final class VirtualMachine: TrackedObject {
     self.parameters.add(key: param, mapsTo: .box(Cell(value)))
     return .void
   }
-  
-  /*
-  internal func bindParameters(_ alist: Expr) {
-    self.parameters = HashTable(copy: self.parameters, mutable: true)
-    var current = alist
-    while case .pair(.pair(let param, let value), let next) = current {
-      self.parameters.add(key: param, mapsTo: .box(Cell(value)))
-      current = next
-    }
-  }
-  */
-  
+
   private func exitFrame() {
     let fp = self.registers.fp
     // Determine former ip
@@ -692,12 +488,12 @@ public final class VirtualMachine: TrackedObject {
       switch n {
         case 0:                             // Return parameter value
           self.pop(overhead)
-          self.push(self.getParam(proc)!)
+          self.push(self.getParameter(.procedure(proc))!)
           return proc
         case 1 where tuple.fst.isNull:      // Set parameter value without setter
           let a0 = self.pop()
           self.pop(overhead)
-          self.push(self.setParam(proc, to: a0))
+          self.push(self.setParameter(.procedure(proc), to: a0))
           return proc
         case 1:                             // Set parameter value with setter
           let a0 = self.pop()
@@ -1002,48 +798,43 @@ public final class VirtualMachine: TrackedObject {
       // log("[collect garbage; freed up objects: \(res)]")
     }
   }
-  
-  @inline(__always) private func execute(_ code: Code, as name: String) throws -> Expr {
-    self.push(.procedure(Procedure(name, code)))
-    return try self.execute(code, args: 0, captured: noExprs)
+
+  internal func pushAndInvoke(_ fun: Expr, to args: Expr) throws -> (Procedure, Int) {
+    self.push(fun)
+    var n = try self.pushArguments(args)
+    let proc = try self.invoke(&n, 1)
+    return (proc, n)
   }
-  
-  @inline(__always) private func execute(_ code: Code) throws -> Expr {
-    self.push(.procedure(Procedure(code)))
-    return try self.execute(code, args: 0, captured: noExprs)
-  }
-  
-  @inline(__always) private func execute(_ code: Code, args: Int, captured: Exprs) throws -> Expr {
-    // Use new registers
+
+  internal func repurpose(proc: Procedure? = nil,
+                          code: Code,
+                          args: Int,
+                          captured: Exprs) -> Registers {
+    if let proc = proc {
+      self.push(.procedure(proc))
+    }
     let savedRegisters = self.registers
     self.registers = Registers(code: code,
                                captured: captured,
                                fp: self.sp &- args,
                                root: !savedRegisters.isInitialized)
-    // Restore old registers when leaving `execute`
-    defer {
-      self.registers = savedRegisters
-    }
-    do {
-      let res = try self.execute()
-      guard !self.abortionRequested else {
-        throw RuntimeError.abortion(stackTrace: self.getStackTrace())
-      }
-      return res
-    } catch let error as RuntimeError {
-      if error.stackTrace == nil {
-        error.attach(stackTrace: self.getStackTrace())
-      }
-      throw error
-    } catch let error as NSError {
-      throw RuntimeError.os(error).attach(stackTrace: self.getStackTrace())
-    }
+    return savedRegisters
+  }
+
+  internal func repurpose(_ registers: Registers) -> Registers {
+    let savedRegisters = self.registers
+    self.registers = registers
+    return savedRegisters
   }
   
-  private func execute() throws -> Expr {
+  internal func execute() throws -> Expr? {
+    let startTime = Timer.currentTimeInMSec
     while self.registers.ip >= 0 && self.registers.ip < self.registers.code.instructions.count {
-      guard !self.abortionRequested else {
+      guard !self.evaluator.abortionRequested else {
         throw RuntimeError.abortion(stackTrace: self.getStackTrace())
+      }
+      if self.evaluator.threads?.next != nil && Timer.currentTimeInMSec > startTime + 100 {
+        return nil
       }
       self.collectGarbageIfNeeded()
       /*
@@ -1510,6 +1301,8 @@ public final class VirtualMachine: TrackedObject {
           self.stack[self.sp] = .undef
           // Re-execute force
           self.registers.ip = self.registers.ip &- 2
+        case .threadYield:
+          return nil
         case .raiseError(let err, let n):
           var irritants: [Expr] = []
           for _ in 0..<n {
@@ -1714,9 +1507,6 @@ public final class VirtualMachine: TrackedObject {
     self.registers.mark(in: gc)
     self.winders?.mark(in: gc)
     gc.mark(self.parameters)
-    if let proc = self.raiseProc {
-      gc.mark(proc)
-    }
   }
   
   /// Debugging output
@@ -1746,9 +1536,6 @@ public final class VirtualMachine: TrackedObject {
     self.parameters = HashTable(equiv: .eq)
     self.execInstr = 0
     self.setParameterProc = nil
-    self.raiseProc = nil
-    self.abortionRequested = false
-    self.exitTriggered = false
     self.traceCalls = .off
   }
 }

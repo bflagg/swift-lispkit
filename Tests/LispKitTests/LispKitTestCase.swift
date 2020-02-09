@@ -78,7 +78,7 @@ open class LispKitTestCase: XCTestCase {
   }
   
   public func eval(_ string: String) -> Expr {
-    return self.context!.machine.onTopLevelDo {
+    return self.context!.machine.onMainThreadDo {
       return try self.context!.machine.eval(str: string,
                                             sourceId: SourceManager.consoleSourceId,
                                             in: context!.global)
@@ -143,7 +143,7 @@ open class LispKitTestCase: XCTestCase {
       print("───────────────────────────────────────────────────────────────────────")
       print("✅ \(test.description)")
       print("expected: \(test.target)")
-      let res = self.context!.machine.onTopLevelDo {
+      let res = self.context!.machine.onMainThreadDo {
         return try self.context!.machine.eval(exprs: test.source, in: context!.global)
       }
       print("computed: \(res)")

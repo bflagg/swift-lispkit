@@ -107,6 +107,8 @@ public enum EvalError: Int, Hashable {
   case invalidRegexpMatchingOption
   case unknownKeyword
   case expectedKeywordArg
+  case allThreadsDeadlocked
+  case threadTerminationForced
   
   public var message: String {
     switch self {
@@ -274,6 +276,10 @@ public enum EvalError: Int, Hashable {
         return "unknown keyword $1; cannot assign value $0"
       case .expectedKeywordArg:
         return "expected keyword argument: $0"
+      case .allThreadsDeadlocked:
+        return "all threads deadlocked"
+      case .threadTerminationForced:
+        return "forced termination of thread"
     }
   }
   

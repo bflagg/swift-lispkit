@@ -139,9 +139,7 @@ public final class CoreLibrary: NativeLibrary {
     if args.count == 2 {
       env = .global(try args[args.startIndex + 1].asEnvironment())
     }
-    return try Compiler.compile(expr: .pair(args.first!, .null),
-                                in: env,
-                                optimize: true)
+    return try Compiler.compile(expr: .pair(args.first!, .null), in: env, optimize: true)
   }
   
   private func compileEval(compiler: Compiler, e: Expr, env: Env, tail: Bool) throws -> Bool {
@@ -1000,7 +998,7 @@ public final class CoreLibrary: NativeLibrary {
       let resolvedName =
         self.context.fileHandler.filePath(forFile: str, relativeTo: compiler.sourceDirectory) ??
           self.context.fileHandler.path(str, relativeTo: compiler.sourceDirectory)
-      let exprs = try self.context.machine.parse(file: resolvedName, foldCase: foldCase)
+      let exprs = try self.context.evaluator.parse(file: resolvedName, foldCase: foldCase)
       try compiler.compileSeq(exprs,
                               in: env,
                               inTailPos: false,

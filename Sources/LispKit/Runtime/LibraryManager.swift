@@ -91,7 +91,7 @@ public final class LibraryManager: TrackedObject, CustomStringConvertible {
     if let filename = self.filename(name) {
       // Evaluate file
       do {
-        _ = try self.context.machine.eval(
+        _ = try self.context.evaluator.current.eval(
                   file: self.context.fileHandler.libraryFilePath(forFile: filename) ?? filename,
                   in: self.context.global)
       } catch let error as RuntimeError {

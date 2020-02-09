@@ -332,7 +332,7 @@ public final class DrawingLibrary: NativeLibrary {
       }
       return drawing
     }
-    guard let value = self.context.machine.getParam(self.drawingParam) else {
+    guard let value = self.context.evaluator.getParam(self.drawingParam) else {
       throw RuntimeError.eval(.invalidDefaultDrawing, .false)
     }
     guard case .object(let obj) = value, let drawing = obj as? Drawing else {
@@ -348,7 +348,7 @@ public final class DrawingLibrary: NativeLibrary {
       }
       return shape
     }
-    guard let value = self.context.machine.getParam(self.shapeParam) else {
+    guard let value = self.context.evaluator.getParam(self.shapeParam) else {
       throw RuntimeError.eval(.invalidDefaultShape, .false)
     }
     guard case .object(let obj) = value, let shape = obj as? Shape else {
@@ -361,7 +361,7 @@ public final class DrawingLibrary: NativeLibrary {
     if case .some(.object(let obj)) = args.last, let shape = obj as? Shape {
       return (shape, true)
     }
-    guard let value = self.context.machine.getParam(self.shapeParam) else {
+    guard let value = self.context.evaluator.getParam(self.shapeParam) else {
       throw RuntimeError.eval(.invalidDefaultShape, .false)
     }
     guard case .object(let obj) = value, let shape = obj as? Shape else {

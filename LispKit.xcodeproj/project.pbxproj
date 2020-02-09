@@ -226,6 +226,9 @@
 		CC8A2AAF1F405E2500D1E4D8 /* 17.sld in Copy pre-installed SRFI libraries */ = {isa = PBXBuildFile; fileRef = CC8A2AAE1F405CDD00D1E4D8 /* 17.sld */; };
 		CC8A2AB11F40681500D1E4D8 /* 48.sld in Copy pre-installed SRFI libraries */ = {isa = PBXBuildFile; fileRef = CC8A2AB01F40672700D1E4D8 /* 48.sld */; };
 		CC8C6EC81CFA65F200126BDD /* ControlFlow.scm in Resources */ = {isa = PBXBuildFile; fileRef = CC8C6EC71CFA65F200126BDD /* ControlFlow.scm */; };
+		CC8DC5C523E54BB500396182 /* Evaluator.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC8DC5C423E54BB500396182 /* Evaluator.swift */; };
+		CC8DC5C823E796D500396182 /* Thread.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC8DC5C723E796D500396182 /* Thread.swift */; };
+		CC8DC5CA23E92C3200396182 /* ThreadLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC8DC5C923E92C3200396182 /* ThreadLibrary.swift */; };
 		CC8EDE4C1D0317AD004E0636 /* Port.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC8EDE4B1D0317AD004E0636 /* Port.swift */; };
 		CC8EDE6E1D07263D004E0636 /* BinaryInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC8EDE6D1D07263D004E0636 /* BinaryInput.swift */; };
 		CC8EDE701D07265E004E0636 /* TextInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC8EDE6F1D07265E004E0636 /* TextInput.swift */; };
@@ -923,6 +926,9 @@
 		CC8A2AB01F40672700D1E4D8 /* 48.sld */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = 48.sld; sourceTree = "<group>"; };
 		CC8C6EC71CFA65F200126BDD /* ControlFlow.scm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = ControlFlow.scm; sourceTree = "<group>"; };
 		CC8DC5C623E7408500396182 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
+		CC8DC5C423E54BB500396182 /* Evaluator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Evaluator.swift; sourceTree = "<group>"; };
+		CC8DC5C723E796D500396182 /* Thread.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Thread.swift; sourceTree = "<group>"; };
+		CC8DC5C923E92C3200396182 /* ThreadLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadLibrary.swift; sourceTree = "<group>"; };
 		CC8EDE4B1D0317AD004E0636 /* Port.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Port.swift; sourceTree = "<group>"; };
 		CC8EDE6D1D07263D004E0636 /* BinaryInput.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BinaryInput.swift; sourceTree = "<group>"; };
 		CC8EDE6F1D07265E004E0636 /* TextInput.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TextInput.swift; sourceTree = "<group>"; };
@@ -1585,6 +1591,7 @@
 				CC6A3B5F1C52EBD700E962E2 /* StringLibrary.swift */,
 				CC7A125C21EA7C5E00ABEA17 /* RegexpLibrary.swift */,
 				CC4E2D361D09691000D77159 /* PortLibrary.swift */,
+				CC8DC5C923E92C3200396182 /* ThreadLibrary.swift */,
 				CC4575C520F00C4400116F0F /* DrawingLibrary.swift */,
 				CCA6C3D023610674007D2AF0 /* MarkdownLibrary.swift */,
 				CC38528A23126F7A001D5E56 /* InternalLibrary.swift */,
@@ -1632,6 +1639,8 @@
 				CC14F4B11F93A455000FB1E0 /* FeatureRequirement.swift */,
 				CC5696761CBCFA9900F6803E /* Instruction.swift */,
 				CC0980A81C67E81C006B7FB1 /* Code.swift */,
+				CC8DC5C423E54BB500396182 /* Evaluator.swift */,
+				CC8DC5C723E796D500396182 /* Thread.swift */,
 				CC35FD0C1C6FA4B700C8B992 /* VirtualMachine.swift */,
 				CCC41DC51D2851FB003CB4D0 /* VirtualMachineState.swift */,
 				CC0A984D233E70C400C52573 /* GarbageCollector.swift */,
@@ -1927,6 +1936,7 @@
 				CCE2C47A1D9203DE0047E229 /* Environment.swift in Sources */,
 				CC76312120E9518F005F27CE /* Drawing.swift in Sources */,
 				CC8EDE6E1D07263D004E0636 /* BinaryInput.swift in Sources */,
+				CC8DC5C823E796D500396182 /* Thread.swift in Sources */,
 				CC6BB19A1E60F237009A9091 /* Random.swift in Sources */,
 				CC0980AB1C67E84C006B7FB1 /* Cell.swift in Sources */,
 				CC3C92441D84C0D800016C28 /* Library.swift in Sources */,
@@ -1978,6 +1988,7 @@
 				CC7A125D21EA7C5E00ABEA17 /* RegexpLibrary.swift in Sources */,
 				CC6A3B601C52EBD700E962E2 /* StringLibrary.swift in Sources */,
 				CC55A8291C50D35C00772B02 /* Procedure.swift in Sources */,
+				CC8DC5C523E54BB500396182 /* Evaluator.swift in Sources */,
 				CCDF99FC1D3D7A3100FD2A57 /* BoxLibrary.swift in Sources */,
 				CC6A3B701C53F2CF00E962E2 /* SymbolTable.swift in Sources */,
 				CCF529981CBC73F7000C2959 /* StringBuilder.swift in Sources */,
@@ -2009,6 +2020,7 @@
 				CCB585B81E15A6E70064BB18 /* ContextDelegate.swift in Sources */,
 				CC76312520E95204005F27CE /* Transformation.swift in Sources */,
 				CC6A3B681C52F17200E962E2 /* BaseLibrary.swift in Sources */,
+				CC8DC5CA23E92C3200396182 /* ThreadLibrary.swift in Sources */,
 				CC5C0A3F1D8EBE0A00CE2E98 /* MultiMap.swift in Sources */,
 				CCCEB3FF1DF2DAA9009BF66B /* FileHandler.swift in Sources */,
 				CCE4AED0204217D8008BF7E8 /* SourcePosition.swift in Sources */,

@@ -3,7 +3,7 @@
 //  LispKit
 //
 //  Created by Matthias Zenger on 12/04/2016.
-//  Copyright © 2016 ObjectHub. All rights reserved.
+//  Copyright © 2016-2020 ObjectHub. All rights reserved.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -433,6 +433,9 @@ public enum Instruction: CustomStringConvertible {
   
   // Miscellaneous ----------------------------------------------------------------------------
 
+  /// **`thread_yield`**: Yields execution of the current thread.
+  case threadYield
+
   /// **`raise_error` _err_,_n_**: Raises the given evaluation error _err_ using the top _n_
   /// elements on top of the stack as irritants.
   case raiseError(Int, Int)
@@ -636,6 +639,8 @@ public enum Instruction: CustomStringConvertible {
         return "store_in_promise"
       case .swap:
         return "swap"
+      case .threadYield:
+        return "thread_yield"
       case .raiseError(let err, let n):
         return "raise_error \(err), \(n)"
       case .pushCurrentTime:

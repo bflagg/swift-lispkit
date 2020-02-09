@@ -30,6 +30,9 @@ public final class Compiler {
   
   /// Context in which this compiler is running
   public unowned let context: Context
+
+  /// Thread which uses the compiler
+  public unowned let thread: Thread
   
   /// Set to the current syntax name
   internal var syntaxSym: Symbol? = nil
@@ -77,8 +80,10 @@ public final class Compiler {
   /// Initializes a compiler object from the given context, environments, and checkpointer.
   private init(in env: Env,
                and rulesEnv: Env,
-               usingCheckpointer cp: Checkpointer) {
+               usingCheckpointer cp: Checkpointer,
+               on thread: Thread) {
     self.context = env.environment!.context
+    self.thread = thread
     self.env = env
     self.rulesEnv = rulesEnv
     self.checkpointer = cp
@@ -94,12 +99,15 @@ public final class Compiler {
   public static func compile(expr: Expr,
                              in env: Env,
                              and rulesEnv: Env? = nil,
+                             on thread: Thread? = nil,
                              optimize: Bool = false,
                              inDirectory: String? = nil) throws -> Code {
     let checkpointer = Checkpointer()
+    let thread = thread ?? env.environment!.context.evaluator.current!
     var compiler = Compiler(in: env,
                             and: rulesEnv ?? env,
-                            usingCheckpointer: checkpointer)
+                            usingCheckpointer: checkpointer,
+                            on: thread)
     if let dir = inDirectory {
       compiler.sourceDirectory = dir
     }
@@ -109,7 +117,8 @@ public final class Compiler {
       checkpointer.reset()
       compiler = Compiler(in: env,
                           and: rulesEnv ?? env,
-                          usingCheckpointer: checkpointer)
+                          usingCheckpointer: checkpointer,
+                          on: thread)
       if let dir = inDirectory {
         compiler.sourceDirectory = dir
       }
@@ -513,7 +522,7 @@ public final class Compiler {
                     case .macro(let transformer):
                       let expanded = try
                         self.checkpointer.expansion(cp) ??
-                        self.context.machine.apply(.procedure(transformer), to: .pair(cdr, .null))
+                        self.thread.apply(.procedure(transformer), to: .pair(cdr, .null))
                       self.checkpointer.associate(.expansion(expanded), with: cp)
                       // log("expanded = \(expanded)")
                       return expanded
@@ -526,7 +535,7 @@ public final class Compiler {
             }
           case .macroExpansionRequired(let transformer):
             let expanded =
-              try self.context.machine.apply(.procedure(transformer), to: .pair(cdr, .null))
+              try self.thread.apply(.procedure(transformer), to: .pair(cdr, .null))
             // log("expanded = \(expanded)")
             return expanded
         }
@@ -593,7 +602,7 @@ public final class Compiler {
                     case .macro(let transformer):
                       let expanded = try
                         self.checkpointer.expansion(cp) ??
-                        self.context.machine.apply(.procedure(transformer), to: .pair(cdr, .null))
+                        self.thread.apply(.procedure(transformer), to: .pair(cdr, .null))
                       self.checkpointer.associate(.expansion(expanded), with: cp)
                       // log("expanded = \(expanded)")
                       return try self.compile(expanded, in: env, inTailPos: tail)
@@ -616,7 +625,7 @@ public final class Compiler {
             }
           case .macroExpansionRequired(let transformer):
             let expanded =
-              try self.context.machine.apply(.procedure(transformer), to: .pair(cdr, .null))
+              try self.thread.apply(.procedure(transformer), to: .pair(cdr, .null))
             // log("expanded = \(expanded)")
             return try self.compile(expanded, in: env, inTailPos: tail)
         }
@@ -901,9 +910,9 @@ public final class Compiler {
       guard case .pair(.symbol(let sym), .pair(let transformer, .null)) = binding else {
         throw RuntimeError.eval(.malformedBinding, binding, bindingList)
       }
-      let procExpr = try self.context.machine.compileAndEval(expr: transformer,
-                                                             in: env.syntacticalEnv,
-                                                             usingRulesEnv: env)
+      let procExpr = try self.thread.eval(expr: transformer,
+                                          in: env.syntacticalEnv,
+                                          usingRulesEnv: env)
       guard case .procedure(let proc) = procExpr else {
         throw RuntimeError.eval(.malformedTransformer, transformer) //FIXME: Find better error message
       }
@@ -930,7 +939,8 @@ public final class Compiler {
     // Create closure compiler as child of the current compiler
     let closureCompiler = Compiler(in: env,
                                    and: env,
-                                   usingCheckpointer: self.checkpointer)
+                                   usingCheckpointer: self.checkpointer,
+                                   on: self.thread)
     // Compile arguments
     let (arguments, next) = closureCompiler.collectArguments(arglist)
     switch next {
@@ -976,7 +986,8 @@ public final class Compiler {
     // Create closure compiler as child of the current compiler
     let closureCompiler = Compiler(in: env,
                                    and: env,
-                                   usingCheckpointer: self.checkpointer)
+                                   usingCheckpointer: self.checkpointer,
+                                   on: self.thread)
     // Iterate through all cases
     var current = cases
     loop: while case .pair(.pair(let args, let body), let nextCase) = current {
