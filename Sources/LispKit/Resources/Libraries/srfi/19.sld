@@ -117,7 +117,8 @@
           time>?
           time>=?)
   
-  (import (lispkit base))
+  (import (lispkit base)
+          (lispkit date-time) )
 
   (begin
   
@@ -627,12 +628,19 @@
           (+ m 3 (* -12 (quotient m 10)))
           (if (>= 0 y) (- y 1) y))))
 
+
     ;; tm:local-tz-offset reports the number of seconds east of UTC (GMT) for the current time
     ;; zone (e.g., Pacific Standard Time is -28800), including any daylight-saving adjustment
     ;; (e.g., Pacific Daylight Time is -25200). Without argument, it returns the default
     ;; defined by the system. The argument overrides this default if provided.
     (define (tm:local-tz-offset . tzarg)
-      (if (or (null? tzarg) (null? (car tzarg))) (seconds-from-gmt) (caar tzarg)))
+        (define seconds-from-gmt
+            (let ((tzo (timezone-gmt-offset (timezone) ) ) )
+                (if (positive? tzo) (exact tzo) (* -1 (exact (abs tzo) ) ) )
+            )
+        )
+        (if (or (null? tzarg) (null? (car tzarg))) seconds-from-gmt (caar tzarg))
+    )
 
     ;; special thing -- ignores nanos
     (define (tm:time->julian-day-number seconds tz-offset)
