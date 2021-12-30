@@ -63,6 +63,7 @@
           date-year
           date-year-day
           date-zone-offset
+          leap-year?
           julian-day->date
           julian-day->time-monotonic
           julian-day->time-tai
